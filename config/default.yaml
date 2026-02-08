@@ -1,0 +1,10 @@
+transcriber: whisperx          # Options: whisperx, openai_whisper
+whisper_model: large-v3-turbo  # Options: tiny, small, medium, large, large-v2, large-v3-turbo
+use_gpu: true
+
+ai_analyzer: gemini            # Options: gemini
+face_detector: yolo            # Options: yolo
+
+notification:
+  telegram:
+    enabled: true
