@@ -2,9 +2,18 @@ transcriber: whisperx          # Options: whisperx, openai_whisper
 whisper_model: large-v3-turbo  # Options: tiny, small, medium, large, large-v2, large-v3-turbo
 use_gpu: true
 
-ai_analyzer: gemini            # Options: gemini
+ai_analyzer:
+  prompt: infinite_loop  # Switch between: viral_formula, infinite_loop      # Options: viral_formula, infinite_loop
+
+downloader:
+  cookies_file: null     # Optional: path to cookies.txt (Netscape format)
+                         # Example: cookies_file: "cookies.txt"
+
 face_detector: yolo            # Options: yolo
 
 notification:
   telegram:
     enabled: true
+
+# downloader:
+#   cookies_file: "cookies.txt"  # Path to your exported cookies
