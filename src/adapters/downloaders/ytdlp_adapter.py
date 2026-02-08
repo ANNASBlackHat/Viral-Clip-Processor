@@ -31,7 +31,10 @@ class YtDlpDownloader(DownloaderPort):
             ydl_opts['cookiefile'] = self.cookies_file
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            print('start downloading...')
             info = ydl.extract_info(url, download=True)
+            print(f'youtube info: {info}')
+
             filename = ydl.prepare_filename(info)
             
             base, _ = os.path.splitext(filename)
