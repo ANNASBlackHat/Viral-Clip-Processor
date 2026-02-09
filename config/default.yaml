@@ -3,7 +3,8 @@ whisper_model: medium  # Options: tiny, small, medium, large, large-v2, large-v3
 use_gpu: true
 
 ai_analyzer:
-  prompt: infinite_loop  # Switch between: viral_formula, infinite_loop      # Options: viral_formula, infinite_loop
+  model: gemini-1.5-flash-latest  # Options: gemini-1.5-flash-latest, gemini-1.5-pro-latest
+  prompt: viral_formula          # Options: viral_formula, infinite_loop
 
 downloader:
   cookies_file: null     # Optional: path to cookies.txt (Netscape format)

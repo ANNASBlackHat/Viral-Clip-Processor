@@ -41,8 +41,9 @@ class ServiceFactory:
             # Legacy format: ai_analyzer: "gemini"
             prompt_style = "viral_formula"
         else:
-            # New format: ai_analyzer: { prompt: "infinite_loop" }
+            # New format: ai_analyzer: { prompt: "infinite_loop", model: "..." }
             prompt_style = ai_config.get("prompt", "viral_formula")
+            model_name = ai_config.get("model", "gemini-1.5-flash-latest")
         
         # Select parser based on prompt style
         if prompt_style == "infinite_loop":
@@ -54,6 +55,7 @@ class ServiceFactory:
         
         return GeminiAdapter(
             api_key=api_key,
+            model_name=model_name,
             parser=parser,
             prompt_file=prompt_file
         )

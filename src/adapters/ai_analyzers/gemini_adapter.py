@@ -12,7 +12,7 @@ class GeminiAdapter(AIAnalyzerPort):
         self, 
         api_key: str, 
         parser: ResponseParser,
-        model_name: str = "gemini-2.0-flash-exp", 
+        model_name: str = "gemini-flash-latest", 
         prompt_file: str = "config/prompts/viral_formula.txt"
     ):
         self.api_key = api_key
