@@ -67,7 +67,7 @@ class WhisperXAdapter(TranscriberPort):
         duration = segments[-1].end if segments else 0.0
         
         return TranscriptionResult(
-            language=raw_result.get("language", "en"),
+            language=raw_result.get("language", "id"),
             segments=segments,
             duration=duration
         )

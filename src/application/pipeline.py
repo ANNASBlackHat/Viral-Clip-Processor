@@ -34,7 +34,7 @@ class ClipProcessorPipeline:
         # 2. Transcribe (Extract audio internally or pass video path if transcriber supports it)
         # WhisperX/OpenAI supports video files usually, ffmpeg extracts audio on fluid
         # We pass video_path directly
-        transcript = self.transcriber.transcribe(video_path)
+        transcript = self.transcriber.transcribe(video_path, language="id")
         print(f"Transcription complete. Found {len(transcript.segments)} segments.")
         
         # 3. Format Transcript for AI
