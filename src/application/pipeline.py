@@ -31,10 +31,26 @@ class ClipProcessorPipeline:
         video_path = self.downloader.download(url, output_dir)
         print(f"Video downloaded to: {video_path}")
         
-        # 2. Transcribe (Extract audio internally or pass video path if transcriber supports it)
-        # WhisperX/OpenAI supports video files usually, ffmpeg extracts audio on fluid
-        # We pass video_path directly
-        transcript = self.transcriber.transcribe(video_path, language="id")
+        # 2. Extract Audio
+        base_name, _ = os.path.splitext(os.path.basename(video_path))
+        audio_path = os.path.join(output_dir, f"{base_name}.mp3")
+        
+        if not os.path.exists(audio_path):
+            import subprocess
+            print(f"Extracting audio from {video_path} to {audio_path}...")
+            cmd = [
+                "ffmpeg", "-y", "-i", video_path, 
+                "-vn", "-acodec", "libmp3lame", "-q:a", "2", 
+                audio_path
+            ]
+            try:
+                subprocess.run(cmd, capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error during audio extraction: {e.stderr}")
+                raise
+
+        # 3. Transcribe using extracted audio
+        transcript = self.transcriber.transcribe(audio_path, language="id")
         print(f"Transcription complete. Found {len(transcript.segments)} segments.")
         
         # 3. Format Transcript for AI
@@ -51,20 +67,46 @@ class ClipProcessorPipeline:
             print("No valid clips found.")
             return []
             
-        # 6. Extract Clips
+        # 6. Extract Clips (Horizontal first)
         clip_paths = self.editor.extract_clips(video_path, clips, output_dir)
         print(f"Extracted {len(clip_paths)} clips.")
         
-        # 7. (Optional/Future) Vertical Crop & Subtitles
-        # For now, we just notify
+        # 7. Vertical Crop with Smart Seat Tracking
+        final_vertical_clips = []
+        if clip_paths and self.detector and hasattr(self.detector, 'detect_per_frame'):
+            print("Running face detection for smart cropping...")
+            detections = self.detector.detect_per_frame(video_path)
+            
+            # Use KMeans logic to smooth and find seats (Requires fps)
+            from src.adapters.face_detectors.strategies.smart_seat_crop import SmartSeatCropStrategy
+            import cv2
+            
+            cap = cv2.VideoCapture(video_path)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            cap.release()
+            
+            strategy = SmartSeatCropStrategy(min_shot_duration=2.0, smoothing_window=45)
+            speaker_positions = strategy.calculate_camera_positions(detections, fps)
+            
+            for path in clip_paths:
+                base, ext = os.path.splitext(path)
+                vertical_path = f"{base}_vertical{ext}"
+                try:
+                    self.editor.crop_to_vertical(path, vertical_path, speaker_positions)
+                    final_vertical_clips.append(vertical_path)
+                except Exception as e:
+                    print(f"Smart crop failed for {path}: {e}")
+                    final_vertical_clips.append(path) # Fallback to original
+        else:
+            final_vertical_clips = clip_paths
         
         # 8. Notify
         if self.notifier:
-            self.notifier.send_message(f"Processed {len(clip_paths)} clips from {url}")
-            for path in clip_paths:
+            self.notifier.send_message(f"Processed {len(final_vertical_clips)} clips from {url}")
+            for path in final_vertical_clips:
                 self.notifier.send_file(path)
                 
-        return clip_paths
+        return final_vertical_clips
 
     def _format_transcript(self, transcript: TranscriptionResult):
         formatted_lines = []
@@ -83,40 +125,65 @@ class ClipProcessorPipeline:
 
     def _resolve_clips(self, suggestions: List[ClipSuggestion], segment_map: Dict[int, any]) -> List[Clip]:
         resolved_clips = []
+        PADDING_DURATION = 2.0
         
         for sugg in suggestions:
-            time_ranges = []
-            
-            # Filter valid segments
-            valid_ids = [sid for sid in sugg.segment_ids if sid in segment_map]
-            if not valid_ids:
+            # Reconstruct the explicit final sequence exactly
+            raw_segment_ids = sugg.segment_ids
+            if not raw_segment_ids:
                 continue
+
+            valid_segments = []
+            for seg_id in raw_segment_ids:
+                if seg_id in segment_map:
+                    seg = segment_map[seg_id]
+                    valid_segments.append({
+                        'id': seg_id,
+                        'start': seg.start,
+                        'end': seg.end
+                    })
+                    
+            if not valid_segments:
+                continue
+
+            merged_blocks = []
+            current_block = {
+                'start': valid_segments[0]['start'],
+                'end': valid_segments[0]['end'],
+                'last_id': valid_segments[0]['id']
+            }
+
+            for i in range(1, len(valid_segments)):
+                seg = valid_segments[i]
+                prev_id = current_block['last_id']
                 
-            # Merge consecutive segments logic (optional but good)
-            # For now, just map 1:1, the editor handles concatenation
-            # BUT editor expects TimeRange. 
-            # We can merge here to optimize editor calls (less trim filters)
-            
-            # Simple merge logic:
-            if not valid_ids: continue
-            
-            sorted_segments = sorted([segment_map[sid] for sid in valid_ids], key=lambda s: s.start)
-            
-            current_start = sorted_segments[0].start
-            current_end = sorted_segments[0].end
-            
-            for i in range(1, len(sorted_segments)):
-                seg = sorted_segments[i]
-                # If gap is small (< 0.5s), merge
-                if seg.start - current_end < 0.5:
-                    current_end = seg.end
+                # Check consecutive segment ids
+                if seg['id'] == prev_id + 1:
+                    current_block['end'] = seg['end']
+                    current_block['last_id'] = seg['id']
                 else:
-                    time_ranges.append(TimeRange(current_start, current_end))
-                    current_start = seg.start
-                    current_end = seg.end
+                    merged_blocks.append(current_block)
+                    current_block = {
+                        'start': seg['start'],
+                        'end': seg['end'],
+                        'last_id': seg['id']
+                    }
+                    
+            merged_blocks.append(current_block)
             
-            time_ranges.append(TimeRange(current_start, current_end))
-            
+            time_ranges = []
+            for i in range(len(merged_blocks)):
+                block = merged_blocks[i]
+                
+                if i < len(merged_blocks) - 1:
+                    next_block = merged_blocks[i+1]
+                    gap = next_block['start'] - block['end']
+                    
+                    if gap > PADDING_DURATION:
+                        block['end'] += PADDING_DURATION
+                
+                time_ranges.append(TimeRange(block['start'], block['end']))
+
             resolved_clips.append(Clip(
                 title=sugg.title,
                 description=sugg.reasoning,

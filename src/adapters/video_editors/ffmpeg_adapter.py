@@ -64,6 +64,7 @@ class FFmpegAdapter(VideoEditorPort):
             cmd.extend(self.settings['quality_flags'])
             cmd.extend(self.settings['preset'])
             cmd.extend(["-c:a", "aac"])
+            cmd.extend(["-pix_fmt", "yuv420p"])
             cmd.append(output_filename)
             
             print(f"[FFmpeg] Processing clip: {clip.title}")
@@ -76,14 +77,54 @@ class FFmpegAdapter(VideoEditorPort):
         return output_files
 
     def crop_to_vertical(self, video_path: str, output_path: str, speaker_positions: List[int] = None) -> str:
-        # TODO: Implement the complex crop logic using speaker_positions
-        # For now, just a simple center crop
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", video_path,
-            "-vf", "crop=ih*(9/16):ih", 
-            "-c:a", "copy",
-            output_path
-        ]
-        subprocess.run(cmd, check=True)
+        if not speaker_positions:
+            print("[FFmpeg] No speaker_positions provided. Performing simple center crop.")
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-vf", "crop=ih*(9/16):ih",
+                "-c:a", "copy",
+                output_path
+            ]
+            subprocess.run(cmd, check=True)
+            return output_path
+
+        from moviepy.editor import VideoFileClip
+        print(f"[SmartCrop] Processing {video_path}...")
+        
+        clip = VideoFileClip(video_path)
+        w, h = clip.size
+        # Target 9:16
+        new_w = int(h * (9/16))
+        new_h = h
+        if new_w % 2 != 0: new_w -= 1
+        
+        # Determine the x crop parameters given the time t
+        def get_crop_params(t):
+            frame_index = int(t * clip.fps)
+            frame_index = min(frame_index, len(speaker_positions) - 1)
+            
+            current_center_x = speaker_positions[frame_index]
+            
+            x1 = int(current_center_x - (new_w / 2))
+            
+            if x1 < 0: x1 = 0
+            if x1 + new_w > w: x1 = w - new_w
+            
+            return x1, 0, x1 + new_w, new_h
+
+        final_clip = clip.fl(lambda gf, t: gf(t)[0:new_h, get_crop_params(t)[0]:get_crop_params(t)[2]], keep_duration=True)
+        
+        print("[SmartCrop] Rendering final vertical video...")
+        final_clip.write_videofile(
+            output_path,
+            codec="libx264",
+            audio_codec="aac",
+            fps=clip.fps,
+            preset="fast",
+            ffmpeg_params=['-pix_fmt', 'yuv420p']
+        )
+        clip.close()
+        final_clip.close()
+        
         return output_path

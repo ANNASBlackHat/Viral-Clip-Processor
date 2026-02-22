@@ -10,6 +10,7 @@ class TestClipProcessorPipeline(unittest.TestCase):
         self.mock_analyzer = MagicMock()
         self.mock_editor = MagicMock()
         self.mock_detector = MagicMock()
+        del self.mock_detector.detect_per_frame # Bypass ML logic in baseline test
         self.mock_notifier = MagicMock()
         
         self.pipeline = ClipProcessorPipeline(
@@ -21,7 +22,11 @@ class TestClipProcessorPipeline(unittest.TestCase):
             notifier=self.mock_notifier
         )
 
-    def test_pipeline_flow(self):
+    @unittest.mock.patch('os.path.exists')
+    @unittest.mock.patch('subprocess.run')
+    def test_pipeline_flow(self, mock_sub_run, mock_exists):
+        # Mocks for new subprocess audio extraction
+        mock_exists.return_value = False
         # Setup Mocks
         self.mock_downloader.download.return_value = "dummy_video.mp4"
         
@@ -53,7 +58,10 @@ class TestClipProcessorPipeline(unittest.TestCase):
         
         # Assertions
         self.mock_downloader.download.assert_called_once_with(url, output_dir)
-        self.mock_transcriber.transcribe.assert_called_once_with("dummy_video.mp4")
+        # Check audio extracted
+        mock_sub_run.assert_called_once()
+        # Verify transcribed the MP3, not the MP4
+        self.mock_transcriber.transcribe.assert_called_once_with(f"{output_dir}/dummy_video.mp3", language="id")
         self.mock_analyzer.analyze_for_viral_clips.assert_called_once()
         self.mock_editor.extract_clips.assert_called_once()
         self.mock_notifier.send_message.assert_called_once()
@@ -67,6 +75,7 @@ class TestClipProcessorPipeline(unittest.TestCase):
         self.assertEqual(passed_clips[0].title, "Viral Moment")
         self.assertEqual(len(passed_clips[0].segments), 1) 
         # Logic merged consecutive segments 0-5 and 5-10 into 0-10
+        # Pipeline now adds PADDING_DURATION (2.0) only if there is a gap > 2.0s
         self.assertEqual(passed_clips[0].segments[0].start, 0.0)
         self.assertEqual(passed_clips[0].segments[0].end, 10.0)
         

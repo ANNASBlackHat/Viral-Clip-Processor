@@ -31,7 +31,11 @@ class GeminiAdapter(AIAnalyzerPort):
 
     def analyze_for_viral_clips(self, formatted_transcript: str, additional_prompt: str = "") -> List[ClipSuggestion]:
         
-        full_prompt = f"{self.prompt_template}\n\n{additional_prompt}\n\n### TRANSCRIPT:\n{formatted_transcript}"
+        full_prompt = f"{self.prompt_template}\n"
+        if additional_prompt:
+            full_prompt += f"\n## Additional Instruction\n{additional_prompt}\n"
+            
+        full_prompt += f"\n## Context\n{formatted_transcript}"
         
         print(f"[Gemini] Sending prompt to {self.model_name}...")
         
