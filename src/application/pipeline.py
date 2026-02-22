@@ -15,7 +15,8 @@ class ClipProcessorPipeline:
         analyzer: AIAnalyzerPort,
         editor: VideoEditorPort,
         detector: FaceDetectorPort,
-        notifier: NotifierPort
+        notifier: NotifierPort,
+        subtitle_generator: any = None
     ):
         self.downloader = downloader
         self.transcriber = transcriber
@@ -23,6 +24,7 @@ class ClipProcessorPipeline:
         self.editor = editor
         self.detector = detector
         self.notifier = notifier
+        self.subtitle_generator = subtitle_generator
 
     def process(self, url: str, output_dir: str) -> List[str]:
         print(f"=== Starting Pipeline for {url} ===")
@@ -99,6 +101,26 @@ class ClipProcessorPipeline:
                     final_vertical_clips.append(path) # Fallback to original
         else:
             final_vertical_clips = clip_paths
+
+        # 7.5 Generate and Burn Subtitles
+        if self.subtitle_generator and final_vertical_clips:
+            print("Generating and burning subtitles...")
+            subtitled_clips = []
+            for i, path in enumerate(final_vertical_clips):
+                try:
+                    clip_domain = clips[i]
+                    ass_path = path.replace('.mp4', '.ass')
+                    sub_out_path = path.replace('.mp4', '_sub.mp4')
+                    created_ass = self.subtitle_generator.generate(transcript.segments, clip_domain.segments, ass_path)
+                    if os.path.exists(ass_path) and created_ass:
+                        self.editor.burn_subtitles(path, ass_path, sub_out_path)
+                        subtitled_clips.append(sub_out_path)
+                    else:
+                        subtitled_clips.append(path)
+                except Exception as e:
+                    print(f"Failed to burn subtitle for {path}: {e}")
+                    subtitled_clips.append(path)
+            final_vertical_clips = subtitled_clips
         
         # 8. Notify
         if self.notifier:

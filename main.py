@@ -33,7 +33,8 @@ def main():
             analyzer=factory.get_ai_analyzer(),
             editor=factory.get_video_editor(),
             detector=factory.get_face_detector(),
-            notifier=factory.get_notifier()
+            notifier=factory.get_notifier(),
+            subtitle_generator=factory.get_subtitle_generator()
         )
     except Exception as e:
         print(f"Error initializing services: {e}")

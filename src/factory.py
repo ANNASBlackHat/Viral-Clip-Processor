@@ -12,6 +12,8 @@ from src.adapters.video_editors.ffmpeg_adapter import FFmpegAdapter
 from src.adapters.face_detectors.yolo_adapter import YoloAdapter
 from src.adapters.downloaders.ytdlp_adapter import YtDlpDownloader
 from src.adapters.notifiers.telegram_adapter import TelegramNotifier
+from src.adapters.subtitle_generators.ass_subtitle_generator import AssSubtitleGenerator
+from src.ports.interfaces import SubtitleGeneratorPort
 
 class ServiceFactory:
     def __init__(self, config: Dict):
@@ -76,4 +78,7 @@ class ServiceFactory:
                 bot_token=os.getenv("TELEGRAM_TOKEN"),
                 chat_id=os.getenv("TELEGRAM_CHAT_ID")
             )
-        return None 
+        return None
+
+    def get_subtitle_generator(self) -> SubtitleGeneratorPort:
+        return AssSubtitleGenerator() 

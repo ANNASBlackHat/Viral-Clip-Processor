@@ -128,3 +128,24 @@ class FFmpegAdapter(VideoEditorPort):
         final_clip.close()
         
         return output_path
+
+    def burn_subtitles(self, video_path: str, subtitle_path: str, output_path: str) -> str:
+        safe_subtitle_path = subtitle_path.replace(':', '\\\\:')
+        cmd = ["ffmpeg", "-y"]
+        cmd.extend(self.settings['input_flags'])
+        cmd.extend(["-i", video_path])
+        cmd.extend(["-vf", f"subtitles={safe_subtitle_path}"])
+        cmd.extend(["-c:v", self.settings['video_codec']])
+        cmd.extend(self.settings['quality_flags'])
+        cmd.extend(self.settings['preset'])
+        cmd.extend(["-c:a", "copy"])
+        cmd.extend(["-pix_fmt", "yuv420p"])
+        cmd.append(output_path)
+
+        print(f"[FFmpeg] Burning subtitles into {video_path}...")
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            return output_path
+        except subprocess.CalledProcessError as e:
+            print(f"[FFmpeg] Error burning subtitles: {e.stderr.decode()}")
+            raise

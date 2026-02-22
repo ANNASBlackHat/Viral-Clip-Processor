@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Any
-from src.domain.entities import TranscriptionResult, ClipSuggestion, Speaker, Segment
+from src.domain.entities import TranscriptionResult, ClipSuggestion, Speaker, Segment, TimeRange
 
 class TranscriberPort(ABC):
     @abstractmethod
@@ -39,6 +39,16 @@ class VideoEditorPort(ABC):
         """Convert landscape to 9:16 vertical."""
         pass
 
+    @abstractmethod
+    def burn_subtitles(
+        self,
+        video_path: str,
+        subtitle_path: str,
+        output_path: str
+    ) -> str:
+        """Burn subtitles (.ass or .srt) into video."""
+        pass
+
 class FaceDetectorPort(ABC):
     @abstractmethod
     def detect_per_frame(self, video_path: str) -> List[Optional[Speaker]]:
@@ -62,6 +72,6 @@ class NotifierPort(ABC):
 
 class SubtitleGeneratorPort(ABC):
     @abstractmethod
-    def generate(self, segments: List[Segment], output_path: str) -> str:
+    def generate(self, segments: List[Segment], clip_ranges: List[TimeRange], output_path: str) -> str:
         """Generate subtitle file (e.g., .ass or .srt)."""
         pass
